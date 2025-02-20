@@ -4,7 +4,7 @@ The purpose of Sandbox is to be a repository of one-off, simple, usually single-
 
 - [ ] a simple game engine in PyGame
 
-- [ ] an HTML websocket to send and receive data to a browser [pending] 
+- [ ] an HTML websocket to send and receive data to a browser
 
 - [ ] a simple web-scraping tool with login and pagination [pending]
 

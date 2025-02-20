@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        p {
+            font-family: 'FreeSansBold', sans-serif;
+        }
+
+        button {
+            color: black;
+            background-color: white;
+
+            border: 2px solid #008CBA;
+            border-radius: 8px;
+
+            font-size: 16px;
+            margin: 4px 2px;
+            padding: 16px 32px;
+
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+
+            cursor: pointer;
+        }
+        button:active {
+            background-color: #24AE60;
+            transform: translateY(4px);
+        }
+    </style>
+</head>
+<body>
+<script>
+
+    function getBrowserId() {
+        let browserId = localStorage.getItem('browserId');
+        if (!browserId) {
+            browserId = crypto.randomUUID().slice(-4);  // last four elements of crypto.randomUUID
+            localStorage.setItem('browserId', browserId);
+        }
+        return browserId;
+    }
+
+    const ws = new WebSocket('ws://localhost:8765');
+
+    ws.addEventListener('open', () => {
+        console.log('Connected to WebSocket server');
+        ws.send(`${getBrowserId()}.INITIALIZE`);
+    });
+
+    ws.addEventListener('message', event => {
+        // console.log('Received:', event.data);
+        let data = JSON.parse(event.data);
+        if (!data) return console.error("problem")  // TODO
+        // if (data.message) console.log(data.message)
+        if (data.data) {
+            // console.log(data.data)
+            if (data.data.constructions) applyConstructGame(data.data)
+            if (data.data.instructions) applyInstructions(data.data)
+        }
+    });
+
+    ws.addEventListener('close', () => {
+        console.log('Disconnected from WebSocket server');
+    });
+
+    ws.addEventListener('error', error => {
+        console.error('WebSocket error:', error);
+    });
+
+    function onButtonClick(b) {
+        console.log(b)
+        ws.send(`${getBrowserId()}.${b}`);
+    }
+
+    let errors = []
+    function addError(instruction, message) {
+        console.warn(message)
+        errors.push([instruction, message])
+    }
+
+    function blitRectangle(canvas, x, y, w, h, color) {
+        canvas.fillStyle = color;
+        canvas.fillRect(x, y, w, h);
+    }
+
+    function blitText(canvas, x, y, text, align, font_px, color) {
+        canvas.font = font_px + " sans-serif"
+        canvas.textAlign = align
+        canvas.textBaseline = 'top'
+        canvas.fillStyle = color
+        canvas.fillText(text, x, y)
+    }
+
+    function constructLabel(construction) {
+        let element = document.createElement("p")
+        element.id = construction.id
+        element.classList.add("LABEL")
+        element.textContent = construction.text
+        if (construction.style) element.style.cssText = construction.style
+        return element
+    }
+
+    function constructCanvas(construction) {
+        if (!construction.size) return addError(construction, "must contain .size attribute as tuple")
+        let element = document.createElement("canvas")
+        element.id = construction.id
+        element.width = construction.size[0]
+        element.height = construction.size[1]
+        element.classList.add("CANVAS")
+        element.textContent = "<p>Your browser doesn't support canvas.  Contact your system administrator</p>"
+        if (construction.style) {element.style.cssText = construction.style}
+        fillCanvas(element, "#000000")
+        return element
+    }
+
+    function fillCanvas(canvas, color) {
+        let context = canvas.getContext('2d');
+        context.fillStyle = color
+        context.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function constructButtons(construction) {
+        let container = document.createElement("div")
+        container.id = construction.id
+        container.classList.add("BUTTONS")
+        if (container.style) {container.style.cssText = construction.style}
+        if (!construction.buttons) return addError(construction, "must contain at least one .buttons indicator string")
+        for (const b of construction.buttons) {
+            let button = document.createElement("button")
+            button.classList.add("button")
+            button.textContent = b.text
+            button.onclick = () => onButtonClick(b.key)
+            button.style.display = b.visible ? "revert" : "none"  // yes, if all buttons are invisible will render div
+            for (let key of b.keyboard) {
+                document.addEventListener('keydown', function (e) {
+                    if (e.key.toUpperCase() === key.toUpperCase()) {
+                        console.log(`keyboard=${e.key} pressed sending key=${b.key} to backend`)
+                        // e.preventDefault();
+                        onButtonClick(b.key)
+                    }
+                })
+            }
+            container.appendChild(button)
+        }
+        return container
+   }
+
+    let howToRenderInstructionType = {
+        "RECTANGLE": blitRectangle,
+        "TEXT": blitText,
+    }
+
+    let howToApplyInstructionType = {
+        "RECTANGLE": applyInstructionSprite,
+        "TEXT": applyInstructionSprite,
+        "LABEL": applyInstructionLabel,
+    }
+
+    let howToConstructConstructionType = {
+        "LABEL": constructLabel,
+        "CANVAS": constructCanvas,
+        "BUTTONS": constructButtons,
+    }
+
+    let assets = {}
+
+    function applyInstructionSprite(instruction) {
+        // caching can optimize provided we are assured id never changed out from under us by other operations
+        let canvas = document.getElementById(instruction.into);
+        if (!canvas && canvas.getContext) return addError(instruction, `Canvas ${instruction.into} does not exist or does not have 2d context.`)
+
+        try {
+            if (!instruction.xy) return addError(instruction, "render must contain xy tuple")
+            if (!instruction.args) return addError(instruction, "render must contain args tuple")
+            let applyFunction = howToRenderInstructionType[instruction.type]
+            if (!applyFunction) return addError(instruction, "render type missing or unknown")
+            applyFunction(canvas.getContext('2d'), ...instruction.xy, ...instruction.args)
+        } catch (e) {
+            addError(instruction, e)
+        }
+    }
+
+    function applyInstructionLabel(instruction) {
+        let label = document.getElementById(instruction.into);
+        if (!label) return addError(instruction, `Label ${instruction.into} does not exist`)
+
+        try {
+            label.innerText = instruction.args[0]  // TODO: style changes, throw error if id exists
+        } catch (e) {
+            return addError(instruction, e)
+        }
+    }
+
+    function applyInstructions(data) {
+        if (data.assets) {
+            // TODO add assets
+        }
+        if (data.instructions) {
+            let canvas = document.getElementById("PRIMARY");
+            fillCanvas(canvas, "#000000")
+            for (const instruction of data.instructions) {
+                let applyFunction = howToApplyInstructionType[instruction.type]
+                if (!applyFunction) {
+                    addError(instruction, "render type missing or unknown")
+                    continue
+                }
+                applyFunction(instruction)
+            }
+        }
+    }
+
+
+    // Applying Construction at Initialization
+    //
+
+    function applyConstruction(construction) {
+        try {
+            if (!construction.id) return addError(construction, "construction missing id")
+            let constructFunction = howToConstructConstructionType[construction.type]
+            if (!constructFunction) return addError(construction, "construction type missing or unknown")
+            let element = constructFunction(construction)
+            document.querySelector("html").appendChild(element)
+        } catch (e) {
+            return addError(construction, e)
+        }
+    }
+
+    function applyConstructGame(data) {
+        if (data.metadata) {
+            if (data.metadata.title) document.title = data.metadata.title
+        }
+        if (data.constructions) {
+            for (const construction of data.constructions) applyConstruction(construction)
+        }
+    }
+
+
+</script>
+
+</body>
+</html>

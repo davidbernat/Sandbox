@@ -8,6 +8,6 @@ The purpose of Sandbox is to be a repository of one-off, simple, usually single-
 - [ ] a simple web-scraping tool with infinite scroll and cookies
 - [ ] a simple thinking dialog bot with responsive demo user interface [pending]
 - [ ] a simple extension to demo user interface for interactive HTML [pending]
-- [ ] a simple video stream processor with real-time data processing [pending]
+- [ ] a simple video stream processor with real-time data processing
 - [ ] a simple comparison of vector embedding search utilities [pending]
 - [ ] a simple reinforcement learning game engine [pending]

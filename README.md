@@ -11,3 +11,4 @@ The purpose of Sandbox is to be a repository of one-off, simple, usually single-
 - [ ] a simple video stream processor with real-time data processing
 - [ ] a simple comparison of vector embedding search utilities [pending]
 - [ ] a simple reinforcement learning game engine [pending]
+- [ ] 000033 a broad purpose httpx and event hook system for PydanticAI transparency
